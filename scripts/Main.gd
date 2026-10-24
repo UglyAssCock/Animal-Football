@@ -1,5 +1,8 @@
 extends Node
 
+const MeshFactory = preload("res://scripts/MeshFactory.gd")
+const MatchEngine = preload("res://scripts/MatchEngine.gd")
+
 var bg_3d_root: Node3D
 var bg_preview_animal: Node3D
 var bg_preview_ball: Node3D
@@ -7,7 +10,7 @@ var bg_camera: Camera3D
 var bg_stadium: Node3D
 var bg_spin_time: float = 0.0
 
-var match_engine: MatchEngine = null
+var match_engine: Node3D = null
 var ui_layer: CanvasLayer
 var screen_root: Control
 var modal_label: Label
@@ -16,7 +19,6 @@ var modal_panel: PanelContainer
 var current_screen: String = "MAIN_MENU"
 var current_custom_tab: String = "Skins"
 
-# Match HUD references
 var hud_score_lbl: Label
 var hud_clock_lbl: Label
 var hud_down_lbl: Label
@@ -29,9 +31,6 @@ var play_call_panel: PanelContainer
 var play_cards_box: HBoxContainer
 var fourth_down_box: HBoxContainer
 
-# Virtual Joystick & Swipe-to-Juke state
-var joy_base_pos := Vector2(150, 540)
-var joy_knob_pos := Vector2(150, 540)
 var joy_touch_idx: int = -1
 var swipe_touch_idx: int = -1
 var swipe_start_pos := Vector2.ZERO
@@ -53,9 +52,6 @@ func _process(delta: float) -> void:
 			bg_preview_ball.rotation.y = bg_spin_time * 1.8
 			bg_preview_ball.position.y = 1.15 + sin(bg_spin_time * 3.0) * 0.12
 
-# ==========================================================
-# 3D BACKGROUND & CUSTOMIZATION PREVIEW
-# ==========================================================
 func _setup_3d_showcase() -> void:
 	bg_3d_root = Node3D.new()
 	bg_3d_root.name = "Showcase3D"
@@ -78,8 +74,9 @@ func _setup_3d_showcase() -> void:
 
 	bg_camera = Camera3D.new()
 	bg_camera.position = Vector3(0.0, 2.0, 4.8)
-	bg_camera.look_at(Vector3(0.0, 1.3, 0.0), Vector3.UP)
 	bg_3d_root.add_child(bg_camera)
+	bg_camera.current = true
+	bg_camera.look_at(Vector3(0.0, 1.3, 0.0), Vector3.UP)
 
 	_refresh_showcase_models()
 
@@ -93,7 +90,8 @@ func _refresh_showcase_models() -> void:
 
 	var team := GameData.get_selected_team()
 	var stadium := GameData.get_selected_stadium()
-	bg_stadium = MeshFactory.build_stadium(stadium, team, GameData.TEAMS[(team["id"] + 1) % 8])
+	var next_tid: int = (int(team["id"]) + 1) % 8
+	bg_stadium = MeshFactory.build_stadium(stadium, team, GameData.TEAMS[next_tid])
 	bg_stadium.position = Vector3(0, -0.1, -12.0)
 	bg_3d_root.add_child(bg_stadium)
 
@@ -109,9 +107,6 @@ func _refresh_showcase_models() -> void:
 	bg_preview_ball.position = Vector3(0.65 if current_screen == "MAIN_MENU" else -0.35, 1.15, 1.4)
 	bg_3d_root.add_child(bg_preview_ball)
 
-# ==========================================================
-# UI STYLING HELPERS (#0B1A33 Navy, #FFB400 Gold, Rounded)
-# ==========================================================
 func _make_style(bg: Color, border_col: Color, border_w: int = 3, radius: int = 14) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
@@ -155,7 +150,6 @@ func _setup_ui_layer() -> void:
 	screen_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui_layer.add_child(screen_root)
 
-	# Reusable Modal Popup for "Coming Soon" & Rewards
 	modal_panel = PanelContainer.new()
 	modal_panel.visible = false
 	modal_panel.custom_minimum_size = Vector2(460, 210)
@@ -191,6 +185,8 @@ func show_screen(screen_name: String) -> void:
 
 	bg_3d_root.visible = (screen_name != "MATCH")
 	if bg_3d_root.visible:
+		if bg_camera:
+			bg_camera.current = true
 		_refresh_showcase_models()
 
 	match screen_name:
@@ -201,9 +197,6 @@ func show_screen(screen_name: String) -> void:
 		"TOURNAMENT": _build_tournament_screen()
 		"SETTINGS": _build_settings_screen()
 
-# ==========================================================
-# TOP BAR & BOTTOM TABS (Shared by Hub Screens)
-# ==========================================================
 func _add_top_bar(title_text: String) -> void:
 	var bar := PanelContainer.new()
 	bar.position = Vector2(20, 14)
@@ -251,18 +244,16 @@ func _add_bottom_tabs(active_tab: String) -> void:
 		{"name": "Trophies", "screen": "TOURNAMENT"}
 	]
 	for t in tabs:
-		var is_sel: bool = (t["name"] == active_tab)
-		var b := _make_button(t["name"].to_upper(), Vector2(215, 52), is_sel)
+		var t_ref: Dictionary = t
+		var is_sel: bool = (str(t_ref["name"]) == active_tab)
+		var b := _make_button(str(t_ref["name"]).to_upper(), Vector2(215, 52), is_sel)
 		b.pressed.connect(func():
-			if t.has("sub"):
-				current_custom_tab = t["sub"]
-			show_screen(t["screen"])
+			if t_ref.has("sub"):
+				current_custom_tab = str(t_ref["sub"])
+			show_screen(str(t_ref["screen"]))
 		)
 		bar.add_child(b)
 
-# ==========================================================
-# 1. MAIN MENU SCREEN
-# ==========================================================
 func _build_main_menu() -> void:
 	var header := PanelContainer.new()
 	header.position = Vector2(44, 28)
@@ -313,9 +304,6 @@ func _build_main_menu() -> void:
 	row_bottom.add_child(btn_online)
 	menu_col.add_child(row_bottom)
 
-# ==========================================================
-# 2. TEAMS SCREEN (8 Animal Country Cards)
-# ==========================================================
 func _build_teams_screen() -> void:
 	_add_top_bar("SELECT YOUR ANIMAL TEAM")
 	_add_bottom_tabs("Teams")
@@ -340,7 +328,6 @@ func _build_teams_screen() -> void:
 		vb.add_theme_constant_override("separation", 6)
 		card.add_child(vb)
 
-		# Flat 2D Team Color Emblem Banner (Strictly 2D, no shadows)
 		var badge := ColorRect.new()
 		badge.custom_minimum_size = Vector2(256, 36)
 		badge.color = Color(t["primary"])
@@ -367,14 +354,10 @@ func _build_teams_screen() -> void:
 		vb.add_child(pick_btn)
 		grid.add_child(card)
 
-# ==========================================================
-# 3. PLAYER / CUSTOMIZE SCREEN (Skins, Helmets, Balls, Emotes + Stat Bars)
-# ==========================================================
 func _build_customize_screen() -> void:
 	_add_top_bar("PLAYER #12 CUSTOMIZE & STATS")
 	_add_bottom_tabs("Balls" if current_custom_tab == "Balls" else "Players")
 
-	# Right panel (leaves left side open for rotating 3D Animal #12 preview)
 	var right_panel := PanelContainer.new()
 	right_panel.position = Vector2(490, 90)
 	right_panel.size = Vector2(760, 540)
@@ -385,7 +368,6 @@ func _build_customize_screen() -> void:
 	rv.add_theme_constant_override("separation", 12)
 	right_panel.add_child(rv)
 
-	# Stat Bars (Speed, Strength, Agility, Stamina)
 	var stats := GameData.get_effective_stats(GameData.selected_team_id)
 	var stats_grid := GridContainer.new()
 	stats_grid.columns = 2
@@ -403,26 +385,25 @@ func _build_customize_screen() -> void:
 		var pbar := ProgressBar.new()
 		pbar.min_value = 0
 		pbar.max_value = 100
-		pbar.value = stats[st_key]
+		pbar.value = float(stats[st_key])
 		pbar.custom_minimum_size = Vector2(185, 24)
 		pbar.add_theme_stylebox_override("background", _make_style(Color("#071121"), Color("#2B4C7E"), 1, 8))
 		pbar.add_theme_stylebox_override("fill", _make_style(GameData.COLOR_GOLD, GameData.COLOR_GOLD, 0, 8))
 		sb_row.add_child(pbar)
 		stats_grid.add_child(sb_row)
 
-	# Sub-tabs: Skins, Helmets, Balls, Emotes
 	var tab_row := HBoxContainer.new()
 	tab_row.add_theme_constant_override("separation", 12)
 	rv.add_child(tab_row)
 	for cat in ["Skins", "Helmets", "Balls", "Emotes"]:
-		var cbtn := _make_button(cat.to_upper(), Vector2(170, 44), current_custom_tab == cat)
+		var cat_name: String = cat
+		var cbtn := _make_button(cat_name.to_upper(), Vector2(170, 44), current_custom_tab == cat_name)
 		cbtn.pressed.connect(func():
-			current_custom_tab = cat
+			current_custom_tab = cat_name
 			show_screen("CUSTOMIZE")
 		)
 		tab_row.add_child(cbtn)
 
-	# Items Grid
 	var items_grid := GridContainer.new()
 	items_grid.columns = 2
 	items_grid.add_theme_constant_override("h_separation", 16)
@@ -453,9 +434,6 @@ func _build_customize_screen() -> void:
 		iv.add_child(act_btn)
 		items_grid.add_child(icard)
 
-# ==========================================================
-# 4. STADIUMS CAROUSEL SCREEN
-# ==========================================================
 func _build_stadiums_screen() -> void:
 	_add_top_bar("SELECT STADIUM ARENA")
 	_add_bottom_tabs("Stadiums")
@@ -508,9 +486,6 @@ func _build_stadiums_screen() -> void:
 	)
 	nav.add_child(next_btn)
 
-# ==========================================================
-# 5. TOURNAMENT BRACKET & DAILY CHALLENGES
-# ==========================================================
 func _build_tournament_screen() -> void:
 	_add_top_bar("8-TEAM WORLD TOURNAMENT & TROPHIES (WON: %d)" % GameData.trophies_won)
 	_add_bottom_tabs("Trophies")
@@ -521,7 +496,6 @@ func _build_tournament_screen() -> void:
 	main_hb.add_theme_constant_override("separation", 20)
 	screen_root.add_child(main_hb)
 
-	# Left: 8-Team Bracket
 	var b_panel := PanelContainer.new()
 	b_panel.custom_minimum_size = Vector2(680, 530)
 	b_panel.add_theme_stylebox_override("panel", _make_style(GameData.COLOR_NAVY, GameData.COLOR_GOLD, 3, 16))
@@ -547,7 +521,6 @@ func _build_tournament_screen() -> void:
 	play_t_btn.pressed.connect(func(): _launch_match(true))
 	bv.add_child(play_t_btn)
 
-	# Right: Daily Challenges
 	var c_panel := PanelContainer.new()
 	c_panel.custom_minimum_size = Vector2(500, 530)
 	c_panel.add_theme_stylebox_override("panel", _make_style(GameData.COLOR_NAVY, GameData.COLOR_GOLD, 3, 16))
@@ -578,9 +551,6 @@ func _build_tournament_screen() -> void:
 		ch_v.add_child(claim_btn)
 		cv.add_child(ch_box)
 
-# ==========================================================
-# 6. SETTINGS SCREEN
-# ==========================================================
 func _build_settings_screen() -> void:
 	_add_top_bar("GAME SETTINGS")
 
@@ -631,13 +601,12 @@ func _build_settings_screen() -> void:
 	)
 	vb.add_child(q_btn)
 
-# ==========================================================
-# 7. MATCH LAUNCH & TOUCH HUD
-# ==========================================================
 func _launch_match(is_tourn: bool) -> void:
 	current_screen = "MATCH"
 	_clear_screen()
 	bg_3d_root.visible = false
+	if bg_camera:
+		bg_camera.current = false
 
 	var opp_id: int = GameData.get_next_tournament_opponent() if is_tourn else ((GameData.selected_team_id + randi_range(1, 7)) % 8)
 	match_engine = MatchEngine.new()
@@ -651,7 +620,6 @@ func _launch_match(is_tourn: bool) -> void:
 	match_engine.setup_match(GameData.selected_team_id, opp_id, GameData.selected_stadium_id, is_tourn)
 
 func _build_match_hud() -> void:
-	# Top Scoreboard Bar
 	var top_sb := PanelContainer.new()
 	top_sb.position = Vector2(210, 10)
 	top_sb.size = Vector2(860, 62)
@@ -682,13 +650,11 @@ func _build_match_hud() -> void:
 	quit_btn.pressed.connect(func(): show_screen("MAIN_MENU"))
 	hb.add_child(quit_btn)
 
-	# Center Celebration / Action Banner
 	hud_banner_lbl = _make_label("", 44, GameData.COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	hud_banner_lbl.position = Vector2(240, 105)
 	hud_banner_lbl.size = Vector2(800, 70)
 	screen_root.add_child(hud_banner_lbl)
 
-	# Virtual Joystick Visuals (Left Bottom)
 	joy_pad_control = Control.new()
 	joy_pad_control.position = Vector2(60, 450)
 	joy_pad_control.size = Vector2(180, 180)
@@ -705,7 +671,6 @@ func _build_match_hud() -> void:
 	joy_knob_rect.add_theme_stylebox_override("panel", _make_style(GameData.COLOR_GOLD, Color.WHITE, 2, 37))
 	joy_pad_control.add_child(joy_knob_rect)
 
-	# Right Action Buttons: SPRINT, PASS, TACKLE, ABILITY
 	var btn_sprint := _make_button("SPRINT", Vector2(155, 72), true)
 	btn_sprint.position = Vector2(1085, 595)
 	btn_sprint.button_down.connect(func(): if match_engine: match_engine.sprint_held = true)
@@ -727,7 +692,6 @@ func _build_match_hud() -> void:
 	hud_ability_btn.pressed.connect(func(): if match_engine: match_engine.trigger_animal_ability())
 	screen_root.add_child(hud_ability_btn)
 
-	# Play Selection Overlay Panel (3 Play Cards + Quick Play + 4th Down Punt/FG)
 	play_call_panel = PanelContainer.new()
 	play_call_panel.position = Vector2(180, 175)
 	play_call_panel.size = Vector2(920, 340)
@@ -836,9 +800,6 @@ func _on_match_finished(user_won: bool, u_score: int, a_score: int, reward: int)
 	_show_popup("%s\nFinal Score: %d - %d\nEarned +%d Coins!%s" % [title, u_score, a_score, reward, extra])
 	show_screen("TOURNAMENT" if (match_engine and match_engine.is_tournament) else "MAIN_MENU")
 
-# ==========================================================
-# TOUCH JOYSTICK & SWIPE-TO-JUKE INPUT
-# ==========================================================
 func _input(event: InputEvent) -> void:
 	if current_screen != "MATCH" or match_engine == null:
 		return
