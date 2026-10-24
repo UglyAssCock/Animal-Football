@@ -1,4 +1,3 @@
-class_name MeshFactory
 extends RefCounted
 
 static func make_mat(color: Color, rough: float = 0.55, metal: float = 0.05, emit: bool = false) -> StandardMaterial3D:
@@ -81,16 +80,12 @@ static func build_animal_player(team: Dictionary, jersey_num: String = "12", cus
 	var mat_dark := make_mat(Color("#1A1A1A"), 0.4)
 	var mat_gold := make_mat(Color("#FFB400"), 0.3, 0.3)
 
-	# Chunky Torso & Shoulder Pads
 	var torso := add_box(root, Vector3(0.95, 1.05, 0.62), Vector3(0, 1.25, 0), mat_jersey)
 	torso.name = "Torso"
 	add_box(torso, Vector3(1.28, 0.36, 0.72), Vector3(0, 0.36, 0), mat_jersey)
 	add_box(torso, Vector3(1.32, 0.12, 0.75), Vector3(0, 0.50, 0), mat_helmet)
-
-	# Lower pants
 	add_box(torso, Vector3(0.82, 0.32, 0.56), Vector3(0, -0.62, 0), mat_white)
 
-	# Jersey #12 Labels (Front & Back)
 	for side in [-1.0, 1.0]:
 		var lbl := Label3D.new()
 		lbl.text = jersey_num
@@ -104,18 +99,15 @@ static func build_animal_player(team: Dictionary, jersey_num: String = "12", cus
 			lbl.rotation_degrees = Vector3(0, 180, 0)
 		torso.add_child(lbl)
 
-	# Head & Species Features
 	var head := Node3D.new()
 	head.name = "Head"
 	head.position = Vector3(0, 2.18, 0)
 	root.add_child(head)
 
 	add_sphere(head, 0.42, Vector3.ZERO, mat_fur)
-	# Football Helmet dome + facemask bars
 	add_sphere(head, 0.45, Vector3(0, 0.08, -0.03), mat_helmet, Vector3(1.02, 0.92, 1.04))
 	add_box(head, Vector3(0.54, 0.07, 0.25), Vector3(0, -0.05, 0.36), mat_dark)
 	add_box(head, Vector3(0.52, 0.06, 0.22), Vector3(0, -0.17, 0.36), mat_dark)
-	# Eyes
 	add_sphere(head, 0.065, Vector3(-0.16, 0.05, 0.37), mat_white)
 	add_sphere(head, 0.065, Vector3(0.16, 0.05, 0.37), mat_white)
 	add_sphere(head, 0.035, Vector3(-0.16, 0.05, 0.42), mat_dark)
@@ -164,7 +156,6 @@ static func build_animal_player(team: Dictionary, jersey_num: String = "12", cus
 			add_box(head, Vector3(0.34, 0.22, 0.32), Vector3(0, -0.10, 0.40), mat_fur)
 			add_capsule(torso, 0.07, 0.80, Vector3(0, -0.42, -0.48), mat_fur, Vector3(45, 0, 0))
 
-	# Limbs (named so MatchEngine and Preview can animate running/throwing)
 	var arm_l := add_capsule(root, 0.15, 0.72, Vector3(-0.68, 1.25, 0), mat_fur)
 	arm_l.name = "ArmL"
 	var arm_r := add_capsule(root, 0.15, 0.72, Vector3(0.68, 1.25, 0), mat_fur)
@@ -216,7 +207,6 @@ static func build_football(ball_color: Color = Color("#A84A18")) -> Node3D:
 	var mat_white := make_mat(Color.WHITE, 0.3)
 
 	add_sphere(root, 0.26, Vector3.ZERO, mat_leather, Vector3(0.85, 0.85, 1.45))
-	# White laces on top
 	add_box(root, Vector3(0.04, 0.04, 0.28), Vector3(0, 0.22, 0), mat_white)
 	for i in range(-2, 3):
 		add_box(root, Vector3(0.11, 0.03, 0.025), Vector3(0, 0.22, i * 0.055), mat_white)
@@ -235,27 +225,21 @@ static func build_stadium(stadium_data: Dictionary, home_team: Dictionary, away_
 	var mat_home_ez := make_mat(Color(home_team["primary"]), 0.75)
 	var mat_away_ez := make_mat(Color(away_team["primary"]), 0.75)
 
-	# Outer Surround Floor
 	add_box(root, Vector3(95.0, 0.2, 165.0), Vector3(0, -0.18, 0), mat_surround)
 
-	# 20 Alternating Green Turf Stripes (Z from -50 to +50, X width 44)
 	for i in range(20):
 		var z_center: float = -47.5 + float(i) * 5.0
 		var stripe_mat := turf_a if (i % 2 == 0) else turf_b
 		add_box(root, Vector3(44.0, 0.12, 5.0), Vector3(0, -0.06, z_center), stripe_mat)
-		# White 5-yard line
 		add_box(root, Vector3(44.0, 0.13, 0.18), Vector3(0, -0.05, z_center - 2.5), mat_line)
 
-	# Final +50 yard line + Sidelines
 	add_box(root, Vector3(44.0, 0.13, 0.22), Vector3(0, -0.05, 50.0), mat_line)
 	add_box(root, Vector3(0.4, 0.14, 120.0), Vector3(-22.0, -0.05, 0), mat_line)
 	add_box(root, Vector3(0.4, 0.14, 120.0), Vector3(22.0, -0.05, 0), mat_line)
 
-	# Endzones (Home at +50..+60, Away at -60..-50)
 	add_box(root, Vector3(44.0, 0.13, 10.0), Vector3(0, -0.055, 55.0), mat_home_ez)
 	add_box(root, Vector3(44.0, 0.13, 10.0), Vector3(0, -0.055, -55.0), mat_away_ez)
 
-	# Endzone 3D Labels
 	var ez_home_lbl := Label3D.new()
 	ez_home_lbl.text = str(home_team["code"]) + " ENDZONE"
 	ez_home_lbl.font_size = 96
@@ -272,9 +256,8 @@ static func build_stadium(stadium_data: Dictionary, home_team: Dictionary, away_
 	ez_away_lbl.position = Vector3(0, 0.06, -55.0)
 	root.add_child(ez_away_lbl)
 
-	# Yard Number Labels along field
-	var yard_ marks := [-40, -30, -20, -10, 0, 10, 20, 30, 40]
-	var yard_texts := ["10", "20", "30", "40", "50", "40", "30", "20", "10"]
+	var yard_marks: Array[int] = [-40, -30, -20, -10, 0, 10, 20, 30, 40]
+	var yard_texts: Array[String] = ["10", "20", "30", "40", "50", "40", "30", "20", "10"]
 	for idx in range(yard_marks.size()):
 		for side_x in [-16.0, 16.0]:
 			var ylbl := Label3D.new()
@@ -286,33 +269,29 @@ static func build_stadium(stadium_data: Dictionary, home_team: Dictionary, away_
 			ylbl.position = Vector3(side_x, 0.05, float(yard_marks[idx]))
 			root.add_child(ylbl)
 
-	# Yellow Goalposts at Z = -60 and Z = +60
 	for side_z in [-60.0, 60.0]:
 		add_box(root, Vector3(0.45, 3.6, 0.45), Vector3(0, 1.8, side_z), mat_post)
 		add_box(root, Vector3(6.6, 0.38, 0.38), Vector3(0, 3.6, side_z), mat_post)
 		add_box(root, Vector3(0.32, 5.5, 0.32), Vector3(-3.15, 6.3, side_z), mat_post)
 		add_box(root, Vector3(0.32, 5.5, 0.32), Vector3(3.15, 6.3, side_z), mat_post)
 
-	# Stadium Bowl Tiers & Low-Poly Crowd Blocks
 	add_box(root, Vector3(5.0, 4.5, 134.0), Vector3(-28.0, 2.1, 0), mat_wall)
 	add_box(root, Vector3(5.0, 4.5, 134.0), Vector3(28.0, 2.1, 0), mat_wall)
 	add_box(root, Vector3(60.0, 4.5, 5.0), Vector3(0, 2.1, -66.0), mat_wall)
 	add_box(root, Vector3(60.0, 4.5, 5.0), Vector3(0, 2.1, 66.0), mat_wall)
 
-	# Floodlight Towers at 4 Corners
 	var light_mat := make_mat(Color("#FFF8D6"), 0.2, 0.1, true)
 	for cx in [-30.0, 30.0]:
 		for cz in [-66.0, 66.0]:
 			add_box(root, Vector3(1.1, 16.0, 1.1), Vector3(cx, 8.0, cz), mat_wall)
 			add_box(root, Vector3(3.8, 2.2, 1.2), Vector3(cx, 16.5, cz), light_mat)
 
-	# Stadium-Specific Props (Jungle mud patches, Snow drifts, Desert cacti)
 	var st_id: int = int(stadium_data["id"])
-	if st_id == 2: # Jungle mud patches on field
+	if st_id == 2:
 		var mat_mud := make_mat(Color("#5C4033"), 0.95)
 		add_box(root, Vector3(7.5, 0.14, 5.5), Vector3(-6.0, -0.04, -12.0), mat_mud)
 		add_box(root, Vector3(8.0, 0.14, 6.0), Vector3(7.0, -0.04, 15.0), mat_mud)
-	elif st_id == 1: # Snow drifts around sidelines
+	elif st_id == 1:
 		var mat_snow := make_mat(Color.WHITE, 0.9)
 		add_box(root, Vector3(2.8, 0.7, 110.0), Vector3(-24.2, 0.3, 0), mat_snow)
 		add_box(root, Vector3(2.8, 0.7, 110.0), Vector3(24.2, 0.3, 0), mat_snow)
