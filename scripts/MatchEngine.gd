@@ -1,5 +1,6 @@
-class_name MatchEngine
 extends Node3D
+
+const MeshFactory = preload("res://scripts/MeshFactory.gd")
 
 signal match_HUD_updated(state: Dictionary)
 signal play_selection_requested(is_user_offense: bool, down: int, yards_to_go: int)
@@ -22,7 +23,7 @@ var quarter: int = 1
 var clock_sec: float = 120.0
 var is_user_offense: bool = true
 var down: int = 1
-var line_of_scrimmage: float = 20.0 # Z from +50 (user own goal) toward -50 (AI goal)
+var line_of_scrimmage: float = 20.0
 var first_down_z: float = 10.0
 
 var current_play: Dictionary = {}
@@ -92,11 +93,11 @@ func _build_environment() -> void:
 	camera = Camera3D.new()
 	camera.fov = 60.0
 	add_child(camera)
+	camera.current = true
 
 	stadium_node = MeshFactory.build_stadium(stadium_data, user_team, ai_team)
 	add_child(stadium_node)
 
-	# Blue Line of Scrimmage & Gold First-Down Line
 	scrimmage_marker = MeshFactory.add_box(
 		self, Vector3(44.0, 0.15, 0.35), Vector3(0, 0.02, 20.0),
 		MeshFactory.make_mat(Color("#1664E8"), 0.3, 0.1, true)
@@ -129,8 +130,7 @@ func _spawn_teams_and_ball() -> void:
 	ball_node = MeshFactory.build_football(custom_ball)
 	add_child(ball_node)
 
-	# Target ring under open receiver
-	receiver_ring = MeshFactory.add_ConeRing(self) if has_method("add_ConeRing") else MeshFactory.add_cone(
+	receiver_ring = MeshFactory.add_cone(
 		self, 1.1, 0.9, 0.08, Vector3(0, 0.08, 0),
 		MeshFactory.make_mat(Color("#FFB400"), 0.2, 0.2, true)
 	)
@@ -158,7 +158,6 @@ func _setup_formation_for_down() -> void:
 	var off_team := user_players if is_user_offense else ai_players
 	var def_team := ai_players if is_user_offense else user_players
 
-	# Offense positions: [0]=QB/Carrier #12, [1]=WR Left, [2]=WR Right, [3]=OL Left, [4]=OL Right
 	var off_offsets := [
 		Vector3(0.0, 0.0, -4.2 * dir),
 		Vector3(-11.5, 0.0, -1.2 * dir),
@@ -170,7 +169,6 @@ func _setup_formation_for_down() -> void:
 		off_team[i].position = Vector3(off_offsets[i].x, 0.0, line_of_scrimmage + off_offsets[i].z)
 		off_team[i].rotation.y = PI if is_user_offense else 0.0
 
-	# Defense positions: [0]=MLB Captain, [1]=CB Left, [2]=CB Right, [3]=DL Left, [4]=DL Right
 	var def_offsets := [
 		Vector3(0.0, 0.0, 5.5 * dir),
 		Vector3(-11.0, 0.0, 4.5 * dir),
@@ -188,7 +186,7 @@ func _setup_formation_for_down() -> void:
 	_attach_ball_to_carrier()
 	_update_camera(0.0, true)
 	_emit_hud()
-	emit_signal("play_selection_requested", is_user_offense, down, int( roundf(absf(first_down_z - line_of_scrimmage)) ))
+	emit_signal("play_selection_requested", is_user_offense, down, int(roundf(absf(first_down_z - line_of_scrimmage))))
 
 func start_play(play_data: Dictionary) -> void:
 	if phase != Phase.PLAY_SELECT:
@@ -231,7 +229,6 @@ func trigger_pass_or_switch() -> void:
 		return
 	if is_user_offense:
 		if ball_carrier == controlled_player and not ball_in_air and not pass_thrown_this_down:
-			# Pick best open WR (user_players[1] or user_players[2])
 			var wr1 := user_players[1]
 			var wr2 := user_players[2]
 			intended_receiver = wr1 if wr1.position.z < wr2.position.z else wr2
@@ -247,7 +244,6 @@ func trigger_pass_or_switch() -> void:
 			ball_flight_duration = clampf(dist / 26.0, 0.35, 1.1)
 			emit_signal("banner_triggered", "SPIRAL PASS!", GameData.COLOR_WHITE)
 	else:
-		# Switch controlled defender to closest to ball
 		var target_pos := ball_node.position if ball_in_air else (ball_carrier.position if ball_carrier else Vector3.ZERO)
 		var best_p := controlled_player
 		var best_d := 999.0
@@ -272,7 +268,6 @@ func trigger_tackle_or_dive() -> void:
 		if ball_carrier != null and controlled_player.position.distance_to(ball_carrier.position) < 3.1:
 			_resolve_tackle(controlled_player, ball_carrier, true)
 	else:
-		# Dive forward for extra yards
 		controlled_player.position.z -= 2.4
 
 func trigger_animal_ability() -> void:
@@ -343,7 +338,6 @@ func _process(delta: float) -> void:
 				_reset_drive(not is_user_offense, 20.0 if not is_user_offense else -20.0)
 
 func _update_live_play(delta: float) -> void:
-	# Quarter Clock
 	clock_sec -= delta
 	if clock_sec <= 0.0:
 		if quarter < 4:
@@ -354,11 +348,9 @@ func _update_live_play(delta: float) -> void:
 			_end_game()
 			return
 
-	# Gravity return from Eagle/Kangaroo jump
 	if controlled_player and controlled_player.position.y > 0.0:
 		controlled_player.position.y = maxf(0.0, controlled_player.position.y - delta * 6.5)
 
-	# User Movement
 	var base_spd: float = (6.8 + (float(user_stats["speed"]) - 75.0) * 0.09) * float(stadium_data["speed_mult"])
 	if ability_active_timer > 0.0 and str(user_team["animal"]) in ["Wolf", "Bull", "Jaguar"]:
 		base_spd *= 1.48
@@ -377,10 +369,8 @@ func _update_live_play(delta: float) -> void:
 		controlled_player.position.z = clampf(controlled_player.position.z, -58.0, 58.0)
 		controlled_player.rotation.y = atan2(-move_v.x, -move_v.z)
 
-	# Update AI Teammates & Opponents
 	_update_ai_units(delta)
 
-	# Update Airborne Pass or Attached Ball
 	if ball_in_air:
 		ball_flight_t += delta / ball_flight_duration
 		var pos := ball_start_pos.lerp(ball_target_pos, clampf(ball_flight_t, 0.0, 1.0))
@@ -398,7 +388,6 @@ func _update_live_play(delta: float) -> void:
 			receiver_ring.position = Vector3(open_wr.position.x, 0.08, open_wr.position.z)
 		_attach_ball_to_carrier()
 
-	# Check Touchdowns & Tackles
 	if ball_carrier != null:
 		if is_user_offense and ball_carrier.position.z <= -50.0:
 			_score_touchdown(true)
@@ -410,9 +399,8 @@ func _update_live_play(delta: float) -> void:
 		var defenders := ai_players if is_user_offense else user_players
 		for def_p in defenders:
 			if ball_carrier.position.y > 1.3:
-				continue # Jumping over tackler!
+				continue
 			if def_p.position.distance_to(ball_carrier.position) < 1.45:
-				# Check Panda Heavy Block or Bull Charge tackle break
 				if ball_carrier == controlled_player and ability_active_timer > 0.0 and str(user_team["animal"]) in ["Panda", "Bull", "Bear"]:
 					def_p.position += (def_p.position - ball_carrier.position).normalized() * 4.2
 					emit_signal("banner_triggered", "BROKEN TACKLE!", GameData.COLOR_GOLD)
@@ -428,18 +416,17 @@ func _update_ai_units(delta: float) -> void:
 	var ai_spd_mult: float = (0.84 if diff == 0 else (1.0 if diff == 1 else 1.15)) * float(stadium_data["speed_mult"])
 	var ai_spd: float = (6.3 + (float(ai_stats["speed"]) - 75.0) * 0.08) * ai_spd_mult
 
-	# User AI Teammates
 	for i in range(user_players.size()):
 		var p := user_players[i]
 		if p == controlled_player:
 			continue
 		if is_user_offense:
-			if i == 1 or i == 2: # Wide Receivers run routes downfield
+			if i == 1 or i == 2:
 				var target_z := maxf(-54.0, line_of_scrimmage - 28.0)
 				var step := Vector3(0, 0, -1.0) * 7.2 * delta
 				if p.position.z > target_z:
 					p.position += step
-			else: # Linemen block nearest AI defender
+			else:
 				var nearest := _find_nearest(p.position, ai_players)
 				if nearest:
 					var dir := (nearest.position - p.position).normalized()
@@ -449,7 +436,6 @@ func _update_ai_units(delta: float) -> void:
 			var dir := (target - p.position).normalized()
 			p.position += Vector3(dir.x, 0, dir.z) * 6.2 * delta
 
-	# AI Opponents (frozen if stunned by Lion Roar)
 	if stun_timer_ai > 0.0:
 		return
 
@@ -458,14 +444,12 @@ func _update_ai_units(delta: float) -> void:
 		if is_user_offense:
 			var target := ball_target_pos if ball_in_air else (ball_carrier.position if ball_carrier else controlled_player.position)
 			if (i == 1 or i == 2) and not pass_thrown_this_down and current_play.get("type", "run") == "pass":
-				# Cover user receivers
 				target = user_players[i].position + Vector3(0, 0, -1.5)
 			var dir := (target - ai_p.position).normalized()
 			ai_p.position += Vector3(dir.x, 0, dir.z) * ai_spd * delta
 			ai_p.rotation.y = atan2(-dir.x, -dir.z)
 		else:
 			if ai_p == ball_carrier:
-				# AI Carrier runs toward +50 endzone while dodging controlled defender
 				var avoid := Vector3.ZERO
 				if controlled_player and ai_p.position.distance_to(controlled_player.position) < 6.0:
 					avoid.x = signf(ai_p.position.x - controlled_player.position.x) * 0.65
@@ -482,7 +466,6 @@ func _update_ai_units(delta: float) -> void:
 func _resolve_pass_landing() -> void:
 	ball_in_air = false
 	receiver_ring.visible = false
-	# Check Interception by closest defender
 	var defenders := ai_players if is_user_offense else user_players
 	var closest_def := _find_nearest(ball_target_pos, defenders)
 	if closest_def and closest_def.position.distance_to(ball_target_pos) < 2.2 and randf() < 0.35:
@@ -508,13 +491,12 @@ func _resolve_pass_landing() -> void:
 func _resolve_tackle(tackler: Node3D, carrier: Node3D, is_user_tackler: bool) -> void:
 	phase = Phase.TACKLE_CAM
 	phase_timer = 1.15
-	Engine.time_scale = 0.28 # Hit-stop & slow-motion tackle close-up!
+	Engine.time_scale = 0.28
 	cam_shake = 0.55
 
 	if is_user_tackler:
 		GameData.add_challenge_progress("tackle_5", 1)
 
-	# Check fumble chance (affected by stadium mud + strength stats)
 	var base_fumble: float = 0.05 + float(stadium_data["fumble_add"])
 	if not bool(GameData.settings.get("arcade_mode", true)):
 		base_fumble += 0.04
@@ -596,7 +578,7 @@ func _attach_ball_to_carrier() -> void:
 		ball_node.rotation_degrees = Vector3(0, ball_carrier.rotation_degrees.y, 25)
 
 func _update_camera(dt: float, instant: bool) -> void:
-	if camera == null:
+	if camera == null or not camera.is_inside_tree():
 		return
 	var focus := controlled_player.position if controlled_player else Vector3.ZERO
 	if ball_in_air:
